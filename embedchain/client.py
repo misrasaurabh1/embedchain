@@ -1,3 +1,5 @@
+import requests
+import logging
 import json
 import logging
 import os
@@ -84,14 +86,13 @@ class Client:
             logging.warning("Invalid API key provided. API key not updated.")
 
     def check(self, api_key):
-        validation_url = f"{self.host}/api/v1/accounts/api_keys/validate/"
-        response = requests.post(validation_url, headers={"Authorization": f"Token {api_key}"})
-        if response.status_code == 200:
-            return True
-        else:
-            logging.warning(f"Response from API: {response.text}")
-            logging.warning("Invalid API key. Unable to validate.")
-            return False
+        return (
+            requests.post(
+                f"{self.host}/api/v1/accounts/api_keys/validate/",
+                headers={"Authorization": f"Token {api_key}"},
+            ).status_code
+            == 200
+        )
 
     def get(self):
         return self.api_key
