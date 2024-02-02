@@ -1,9 +1,16 @@
+import sys
 import importlib
 
 
 def load_class(class_type):
     module_path, class_name = class_type.rsplit(".", 1)
-    module = importlib.import_module(module_path)
+
+    if module_path in sys.modules:
+        module = sys.modules[module_path]
+    else:
+        module = importlib.import_module(module_path)
+        sys.modules[module_path] = module
+
     return getattr(module, class_name)
 
 
