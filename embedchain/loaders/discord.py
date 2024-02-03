@@ -1,3 +1,4 @@
+import discord
 import hashlib
 import logging
 import os
@@ -99,6 +100,7 @@ class DiscordLoader(BaseLoader):
         import discord
 
         messages = []
+        threads = {}
 
         class DiscordClient(discord.Client):
             async def on_ready(self) -> None:
@@ -109,7 +111,6 @@ class DiscordLoader(BaseLoader):
                         raise ValueError(
                             f"Channel {channel_id} is not a text channel. " "Only text channels are supported for now."
                         )
-                    threads = {}
 
                     for thread in channel.threads:
                         threads[thread.id] = thread
@@ -122,19 +123,20 @@ class DiscordLoader(BaseLoader):
 
                 except Exception as e:
                     logging.error(e)
-                    await self.close()
                 finally:
                     await self.close()
 
         intents = discord.Intents.default()
         intents.message_content = True
         client = DiscordClient(intents=intents)
-        client.run(self.token)
+        try:
+            client.run(self.token)
+        except Exception as e:
+            logging.error(e)
 
         meta_data = {
             "url": channel_id,
         }
-
         messages = str(messages)
 
         doc_id = hashlib.sha256((messages + channel_id).encode()).hexdigest()
