@@ -160,14 +160,6 @@ class BaseLlmConfig(BaseConfig):
 
     @staticmethod
     def validate_prompt(prompt: Template) -> Optional[re.Match[str]]:
-        """
-        validate the prompt
-
-        :param prompt: the prompt to validate
-        :type prompt: Template
-        :return: valid (true) or invalid (false)
-        :rtype: Optional[re.Match[str]]
-        """
         return re.search(query_re, prompt.template) and re.search(context_re, prompt.template)
 
     @staticmethod
