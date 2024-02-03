@@ -31,14 +31,12 @@ class CacheSimilarityEvalConfig(BaseConfig):
 
     @staticmethod
     def from_config(config: Optional[dict[str, Any]]):
-        if config is None:
-            return CacheSimilarityEvalConfig()
-        else:
-            return CacheSimilarityEvalConfig(
-                strategy=config.get("strategy", "distance"),
-                max_distance=config.get("max_distance", 1.0),
-                positive=config.get("positive", False),
-            )
+        return CacheConfig(
+            similarity_eval_config=CacheSimilarityEvalConfig.from_config(config.get("similarity_evaluation"))
+            if config
+            else None,
+            init_config=CacheInitConfig.from_config(config.get("init_config")) if config else None,
+        )
 
 
 @register_deserializable
@@ -66,13 +64,12 @@ class CacheInitConfig(BaseConfig):
 
     @staticmethod
     def from_config(config: Optional[dict[str, Any]]):
-        if config is None:
-            return CacheInitConfig()
-        else:
-            return CacheInitConfig(
-                similarity_threshold=config.get("similarity_threshold", 0.8),
-                auto_flush=config.get("auto_flush", 20),
-            )
+        return CacheConfig(
+            similarity_eval_config=CacheSimilarityEvalConfig.from_config(config.get("similarity_evaluation"))
+            if config
+            else None,
+            init_config=CacheInitConfig.from_config(config.get("init_config")) if config else None,
+        )
 
 
 @register_deserializable
@@ -87,10 +84,9 @@ class CacheConfig(BaseConfig):
 
     @staticmethod
     def from_config(config: Optional[dict[str, Any]]):
-        if config is None:
-            return CacheConfig()
-        else:
-            return CacheConfig(
-                similarity_eval_config=CacheSimilarityEvalConfig.from_config(config.get("similarity_evaluation", {})),
-                init_config=CacheInitConfig.from_config(config.get("init_config", {})),
-            )
+        return CacheConfig(
+            similarity_eval_config=CacheSimilarityEvalConfig.from_config(config.get("similarity_evaluation"))
+            if config
+            else None,
+            init_config=CacheInitConfig.from_config(config.get("init_config")) if config else None,
+        )
