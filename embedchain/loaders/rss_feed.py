@@ -20,7 +20,7 @@ class RSSFeedLoader(BaseLoader):
     @staticmethod
     def serialize_metadata(metadata):
         for key, value in metadata.items():
-            if not isinstance(value, (str, int, float, bool)):
+            if type(value) not in (str, int, float, bool):
                 metadata[key] = str(value)
 
         return metadata
@@ -28,8 +28,7 @@ class RSSFeedLoader(BaseLoader):
     @staticmethod
     def get_rss_content(url: str):
         try:
-            from langchain.document_loaders import \
-                RSSFeedLoader as LangchainRSSFeedLoader
+            from langchain.document_loaders import RSSFeedLoader as LangchainRSSFeedLoader
         except ImportError:
             raise ImportError(
                 """RSSFeedLoader file requires extra dependencies.
