@@ -53,7 +53,7 @@ class Client:
     @classmethod
     def load_config(cls):
         if not os.path.exists(CONFIG_FILE):
-            cls.setup_dir()
+            return {"user_id": cls.setup_dir()}  # Merge setup_dir here
 
         with open(CONFIG_FILE, "r") as config_file:
             return json.load(config_file)
@@ -98,3 +98,26 @@ class Client:
 
     def __str__(self):
         return self.api_key
+
+
+@classmethod
+def setup_dir(cls):
+    """
+    Loads the user id from the config file if it exists, otherwise generates a new
+    one and saves it to the config file.
+    :return: user id
+    :rtype: str
+    """
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    data = None
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            data = json.load(f)
+
+    if data and "user_id" in data:
+        return data["user_id"]
+
+    u_id = str(uuid.uuid4())
+    with open(CONFIG_FILE, "w") as f:
+        json.dump({"user_id": u_id}, f)
+    return u_id  # Return generated user id
