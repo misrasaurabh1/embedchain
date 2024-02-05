@@ -9,10 +9,8 @@ from gptcache.manager import get_data_manager
 from gptcache.manager.scalar_data.base import Answer
 from gptcache.manager.scalar_data.base import DataType as CacheDataType
 from gptcache.session import Session
-from gptcache.similarity_evaluation.distance import \
-    SearchDistanceEvaluation  # noqa: F401
-from gptcache.similarity_evaluation.exact_match import \
-    ExactMatchEvaluation  # noqa: F401
+from gptcache.similarity_evaluation.distance import SearchDistanceEvaluation  # noqa: F401
+from gptcache.similarity_evaluation.exact_match import ExactMatchEvaluation  # noqa: F401
 
 
 def gptcache_pre_function(data: dict[str, Any], **params: dict[str, Any]):
@@ -29,7 +27,8 @@ def gptcache_data_convert(cache_data):
 
 
 def gptcache_update_cache_callback(llm_data, update_cache_func, *args, **kwargs):
-    logging.info("[Cache] Cache missed, updating cache...")
+    # Comment the logging line below when not debugging.
+    # logging.info("[Cache] Cache missed, updating cache...")
     update_cache_func(Answer(llm_data, CacheDataType.STR))
     return llm_data
 
