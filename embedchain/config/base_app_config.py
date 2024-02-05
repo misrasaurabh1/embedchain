@@ -53,12 +53,6 @@ class BaseAppConfig(BaseConfig, JSONSerializable):
         return
 
     def _setup_logging(self, debug_level):
-        level = logging.WARNING  # Default level
-        if debug_level is not None:
-            level = getattr(logging, debug_level.upper(), None)
-            if not isinstance(level, int):
-                raise ValueError(f"Invalid log level: {debug_level}")
-
-        logging.basicConfig(format="%(asctime)s [%(name)s] [%(levelname)s] %(message)s", level=level)
+        logging.basicConfig(format="%(asctime)s [%(name)s] [%(levelname)s] %(message)s", level=debug_level.upper())
         self.logger = logging.getLogger(__name__)
         return
