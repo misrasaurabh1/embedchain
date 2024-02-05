@@ -100,9 +100,7 @@ class GmailReader:
                 ctype = part.get_content_type()
                 cdispo = str(part.get("Content-Disposition"))
 
-                if ctype == "text/plain" and "attachment" not in cdispo:
-                    return decode_payload(part)
-                elif ctype == "text/html":
+                if "attachment" not in cdispo and (ctype == "text/plain" or ctype == "text/html"):
                     return decode_payload(part)
         else:
             return decode_payload(mime_msg)
