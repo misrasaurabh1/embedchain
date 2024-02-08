@@ -1,3 +1,4 @@
+from langchain.tools import DuckDuckGoSearchRun
 import logging
 from collections.abc import Generator
 from typing import Any, Optional
@@ -5,9 +6,7 @@ from typing import Any, Optional
 from langchain.schema import BaseMessage as LCBaseMessage
 
 from embedchain.config import BaseLlmConfig
-from embedchain.config.llm.base import (DEFAULT_PROMPT,
-                                        DEFAULT_PROMPT_WITH_HISTORY_TEMPLATE,
-                                        DOCS_SITE_PROMPT_TEMPLATE)
+from embedchain.config.llm.base import DEFAULT_PROMPT, DEFAULT_PROMPT_WITH_HISTORY_TEMPLATE, DOCS_SITE_PROMPT_TEMPLATE
 from embedchain.helpers.json_serializable import JSONSerializable
 from embedchain.memory.base import ChatHistory
 from embedchain.memory.message import ChatMessage
@@ -172,56 +171,31 @@ class BaseLlm(JSONSerializable):
         logging.info(f"Answer: {streamed_answer}")
 
     def query(self, input_query: str, contexts: list[str], config: BaseLlmConfig = None, dry_run=False):
-        """
-        Queries the vector database based on the given input query.
-        Gets relevant doc based on the query and then passes it to an
-        LLM as context to get the answer.
+        if config:
+            prev_config = self.config.serialize()
+            self.config = config
 
-        :param input_query: The query to use.
-        :type input_query: str
-        :param contexts: Embeddings retrieved from the database to be used as context.
-        :type contexts: list[str]
-        :param config: The `BaseLlmConfig` instance to use as configuration options. This is used for one method call.
-        To persistently use a config, declare it during app init., defaults to None
-        :type config: Optional[BaseLlmConfig], optional
-        :param dry_run: A dry run does everything except send the resulting prompt to
-        the LLM. The purpose is to test the prompt, not the response., defaults to False
-        :type dry_run: bool, optional
-        :return: The answer to the query or the dry run result
-        :rtype: str
-        """
-        try:
-            if config:
-                # A config instance passed to this method will only be applied temporarily, for one call.
-                # So we will save the previous config and restore it at the end of the execution.
-                # For this we use the serializer.
-                prev_config = self.config.serialize()
-                self.config = config
+        if config is not None and config.query_type == "Images":
+            return contexts
 
-            if config is not None and config.query_type == "Images":
-                return contexts
+        if self.is_docs_site_instance:
+            self.config.prompt = DOCS_SITE_PROMPT_TEMPLATE
+            self.config.number_documents = 5
+        k = {}
+        if self.online:
+            k["web_search_result"] = self.access_search_and_get_results(input_query)
+        prompt = self.generate_prompt(input_query, contexts, **k)
+        logging.info(f"Prompt: {prompt}")
+        if dry_run:
+            return prompt
 
-            if self.is_docs_site_instance:
-                self.config.prompt = DOCS_SITE_PROMPT_TEMPLATE
-                self.config.number_documents = 5
-            k = {}
-            if self.online:
-                k["web_search_result"] = self.access_search_and_get_results(input_query)
-            prompt = self.generate_prompt(input_query, contexts, **k)
-            logging.info(f"Prompt: {prompt}")
-            if dry_run:
-                return prompt
+        answer = self.get_answer_from_llm(prompt)
+        logging.info(f"Answer: {answer}")
 
-            answer = self.get_answer_from_llm(prompt)
-            if isinstance(answer, str):
-                logging.info(f"Answer: {answer}")
-                return answer
-            else:
-                return self._stream_response(answer)
-        finally:
-            if config:
-                # Restore previous config
-                self.config: BaseLlmConfig = BaseLlmConfig.deserialize(prev_config)
+        if config:
+            self.config: BaseLlmConfig = BaseLlmConfig.deserialize(prev_config)
+
+        return answer
 
     def chat(
         self, input_query: str, contexts: list[str], config: BaseLlmConfig = None, dry_run=False, session_id: str = None
@@ -300,3 +274,58 @@ class BaseLlm(JSONSerializable):
             messages.append(SystemMessage(content=system_prompt))
         messages.append(HumanMessage(content=prompt))
         return messages
+
+
+def serialize(self) -> str:
+    try:
+        return json.dumps(self, default=self._auto_encoder, ensure_ascii=False)
+    except Exception as e:
+        logging.error(f"Serialization error: {e}")
+        return "{}"
+
+
+@staticmethod
+def access_search_and_get_results(input_query: str):
+    search = DuckDuckGoSearchRun()
+    logging.info(f"Access search to get answers for {input_query}")
+    return search.run(input_query)
+
+
+def generate_prompt(self, input_query: str, contexts: list[str], **kwargs: dict[str, Any]) -> str:
+    context_string = " | ".join(contexts)
+    history = self.history or "- no history -"
+    config = self.config
+    web_search_result = kwargs.get("web_search_result", "")
+
+    if web_search_result:
+        context_string = self._append_search_and_context(context_string, web_search_result)
+
+    prompt_contains_history = config._validate_prompt_history(config.prompt)
+
+    if prompt_contains_history or history:
+        if prompt_contains_history:
+            prompt = config.prompt.substitute(context=context_string, query=input_query, history=history)
+        elif config.prompt.template == DEFAULT_PROMPT:
+            prompt = DEFAULT_PROMPT_WITH_HISTORY_TEMPLATE.substitute(
+                context=context_string, query=input_query, history=history
+            )
+        else:
+            logging.warning(
+                "Your bot contains a history, but prompt does not include `$history` key. History is ignored."
+            )
+            prompt = config.prompt.substitute(context=context_string, query=input_query)
+    else:
+        prompt = config.prompt.substitute(context=context_string, query=input_query)
+
+    return prompt
+
+
+def get_answer_from_llm(self, prompt: str):
+    return str(self.get_llm_model_answer(prompt))
+
+
+@staticmethod
+def _stream_response(answer: Any) -> Generator[Any, Any, None]:
+    streamed_answer = "".join(answer)
+    logging.info(f"Answer: {streamed_answer}")
+    return streamed_answer
