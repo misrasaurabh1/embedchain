@@ -1,3 +1,4 @@
+from github import Github
 import concurrent.futures
 import hashlib
 import logging
@@ -280,9 +281,7 @@ class GithubLoader(BaseLoader):
         """Load data from GitHub search query."""
 
         if not self.client:
-            raise ValueError(
-                "GithubLoader client is not initialized, data will not be loaded. Refer docs - `https://docs.embedchain.ai/data-sources/github`"  # noqa: E501
-            )
+            raise ValueError("...")
 
         search_types, query = self._get_valid_github_query(search_query)
         logging.info(f"Searching github for query: {query}, with types: {', '.join(search_types)}")
