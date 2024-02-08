@@ -1,3 +1,4 @@
+import queue
 import hashlib
 import logging
 import os
@@ -83,7 +84,6 @@ class NotionPageLoader:
         return result_lines
 
     def load_data(self, page_ids: list[str]) -> list[NotionDocument]:
-        """Load data from the given list of page IDs."""
         docs = []
         for page_id in page_ids:
             page_text = self._read_block(page_id)
@@ -93,27 +93,50 @@ class NotionPageLoader:
 
 @register_deserializable
 class NotionLoader(BaseLoader):
-    def load_data(self, source):
-        """Load data from a Notion URL."""
+    def load_data(self, page_ids: list[str]) -> list[NotionDocument]:
+        docs = []
+        for page_id in page_ids:
+            page_text = self._read_block(page_id)
+            docs.append(NotionDocument(text=page_text, extra_info={"page_id": page_id}))
+        return docs
 
-        id = source[-32:]
-        formatted_id = f"{id[:8]}-{id[8:12]}-{id[12:16]}-{id[16:20]}-{id[20:]}"
-        logging.debug(f"Extracted notion page id as: {formatted_id}")
 
-        integration_token = os.getenv("NOTION_INTEGRATION_TOKEN")
-        reader = NotionPageLoader(integration_token=integration_token)
-        documents = reader.load_data(page_ids=[formatted_id])
+def _read_block(self, block_id: str, num_tabs: int = 0) -> str:
+    result_lines_arr = []
+    to_process = queue.Queue()
+    to_process.put((block_id, num_tabs))
 
-        raw_text = documents[0].text
+    with requests.Session() as s:
+        s.headers.update(self.headers)
 
-        text = clean_string(raw_text)
-        doc_id = hashlib.sha256((text + source).encode()).hexdigest()
-        return {
-            "doc_id": doc_id,
-            "data": [
-                {
-                    "content": text,
-                    "meta_data": {"url": f"notion-{formatted_id}"},
-                }
-            ],
-        }
+        while not to_process.empty():
+            cur_block_id, cur_tabs = to_process.get()
+            block_url = self.BLOCK_CHILD_URL_TMPL.format(block_id=cur_block_id)
+            res = s.get(block_url)
+            data = res.json()
+
+            for result in data["results"]:
+                result_type = result["type"]
+                result_obj = result[result_type]
+
+                cur_result_text_arr = []
+                if "rich_text" in result_obj:
+                    for rich_text in result_obj["rich_text"]:
+                        if "text" in rich_text:
+                            text = rich_text["text"]["content"]
+                            prefix = "\t" * cur_tabs
+                            cur_result_text_arr.append(prefix + text)
+
+                result_block_id = result["id"]
+                has_children = result["has_children"]
+                if has_children:
+                    to_process.put((result_block_id, cur_tabs + 1))
+
+                cur_result_text = "\n".join(cur_result_text_arr)
+                result_lines_arr.append(cur_result_text)
+
+            if data["next_cursor"] is not None:
+                to_process.put((data["next_cursor"], cur_tabs))
+
+    result_lines = "\n".join(result_lines_arr)
+    return result_lines
