@@ -9,10 +9,8 @@ from gptcache.manager import get_data_manager
 from gptcache.manager.scalar_data.base import Answer
 from gptcache.manager.scalar_data.base import DataType as CacheDataType
 from gptcache.session import Session
-from gptcache.similarity_evaluation.distance import \
-    SearchDistanceEvaluation  # noqa: F401
-from gptcache.similarity_evaluation.exact_match import \
-    ExactMatchEvaluation  # noqa: F401
+from gptcache.similarity_evaluation.distance import SearchDistanceEvaluation  # noqa: F401
+from gptcache.similarity_evaluation.exact_match import ExactMatchEvaluation  # noqa: F401
 
 
 def gptcache_pre_function(data: dict[str, Any], **params: dict[str, Any]):
@@ -24,7 +22,6 @@ def gptcache_data_manager(vector_dimension):
 
 
 def gptcache_data_convert(cache_data):
-    logging.info("[Cache] Cache hit, returning cache data...")
     return cache_data
 
 
