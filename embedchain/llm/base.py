@@ -1,3 +1,5 @@
+import json
+from langchain.tools import DuckDuckGoSearchRun
 import logging
 from collections.abc import Generator
 from typing import Any, Optional
@@ -5,9 +7,7 @@ from typing import Any, Optional
 from langchain.schema import BaseMessage as LCBaseMessage
 
 from embedchain.config import BaseLlmConfig
-from embedchain.config.llm.base import (DEFAULT_PROMPT,
-                                        DEFAULT_PROMPT_WITH_HISTORY_TEMPLATE,
-                                        DOCS_SITE_PROMPT_TEMPLATE)
+from embedchain.config.llm.base import DEFAULT_PROMPT, DEFAULT_PROMPT_WITH_HISTORY_TEMPLATE, DOCS_SITE_PROMPT_TEMPLATE
 from embedchain.helpers.json_serializable import JSONSerializable
 from embedchain.memory.base import ChatHistory
 from embedchain.memory.message import ChatMessage
@@ -223,63 +223,26 @@ class BaseLlm(JSONSerializable):
                 # Restore previous config
                 self.config: BaseLlmConfig = BaseLlmConfig.deserialize(prev_config)
 
-    def chat(
-        self, input_query: str, contexts: list[str], config: BaseLlmConfig = None, dry_run=False, session_id: str = None
-    ):
-        """
-        Queries the vector database on the given input query.
-        Gets relevant doc based on the query and then passes it to an
-        LLM as context to get the answer.
+    def chat(self, input_query, contexts, config=None, dry_run=False, session_id=None):
+        k = {}
+        if config:
+            self.config = config
 
-        Maintains the whole conversation in memory.
+        if self.is_docs_site_instance:
+            self.config.prompt = DOCS_SITE_PROMPT_TEMPLATE
+            self.config.number_documents = 5
 
-        :param input_query: The query to use.
-        :type input_query: str
-        :param contexts: Embeddings retrieved from the database to be used as context.
-        :type contexts: list[str]
-        :param config: The `BaseLlmConfig` instance to use as configuration options. This is used for one method call.
-        To persistently use a config, declare it during app init., defaults to None
-        :type config: Optional[BaseLlmConfig], optional
-        :param dry_run: A dry run does everything except send the resulting prompt to
-        the LLM. The purpose is to test the prompt, not the response., defaults to False
-        :type dry_run: bool, optional
-        :param session_id: Session ID to use for the conversation, defaults to None
-        :type session_id: str, optional
-        :return: The answer to the query or the dry run result
-        :rtype: str
-        """
-        try:
-            if config:
-                # A config instance passed to this method will only be applied temporarily, for one call.
-                # So we will save the previous config and restore it at the end of the execution.
-                # For this we use the serializer.
-                prev_config = self.config.serialize()
-                self.config = config
+        if self.online:
+            k["web_search_result"] = self.access_search_and_get_results(input_query)
 
-            if self.is_docs_site_instance:
-                self.config.prompt = DOCS_SITE_PROMPT_TEMPLATE
-                self.config.number_documents = 5
-            k = {}
-            if self.online:
-                k["web_search_result"] = self.access_search_and_get_results(input_query)
+        prompt = self.generate_prompt(input_query, contexts, **k)
 
-            prompt = self.generate_prompt(input_query, contexts, **k)
-            logging.info(f"Prompt: {prompt}")
+        if dry_run:
+            return prompt
 
-            if dry_run:
-                return prompt
+        answer = self.get_answer_from_llm(prompt)
 
-            answer = self.get_answer_from_llm(prompt)
-            if isinstance(answer, str):
-                logging.info(f"Answer: {answer}")
-                return answer
-            else:
-                # this is a streamed response and needs to be handled differently.
-                return self._stream_response(answer)
-        finally:
-            if config:
-                # Restore previous config
-                self.config: BaseLlmConfig = BaseLlmConfig.deserialize(prev_config)
+        return self._stream_response(answer)
 
     @staticmethod
     def _get_messages(prompt: str, system_prompt: Optional[str] = None) -> list[LCBaseMessage]:
