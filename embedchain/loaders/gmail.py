@@ -89,20 +89,21 @@ class GmailReader:
     @staticmethod
     def _get_body(mime_msg) -> str:
         def decode_payload(part):
+            payload = part.get_payload(decode=True)
             charset = part.get_content_charset() or "utf-8"
             try:
-                return part.get_payload(decode=True).decode(charset)
+                return payload.decode(charset)
             except UnicodeDecodeError:
-                return part.get_payload(decode=True).decode(charset, errors="replace")
+                return payload.decode(charset, errors="replace")
 
         if mime_msg.is_multipart():
             for part in mime_msg.walk():
                 ctype = part.get_content_type()
-                cdispo = str(part.get("Content-Disposition"))
-
-                if ctype == "text/plain" and "attachment" not in cdispo:
+                # store result of 'attachment' in cdispo check to avoid duplicate part.get call
+                cdispo_attachment_check = "attachment" in str(part.get("Content-Disposition"))
+                if ctype == "text/plain" and not cdispo_attachment_check:
                     return decode_payload(part)
-                elif ctype == "text/html":
+                elif ctype == "text/html" and not cdispo_attachment_check:
                     return decode_payload(part)
         else:
             return decode_payload(mime_msg)
