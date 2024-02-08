@@ -1,3 +1,4 @@
+import subprocess
 import os
 import re
 import shutil
@@ -310,8 +311,8 @@ def deploy_hf_spaces(ec_app_name):
     hf_spaces_deploy_cmd = ["huggingface-cli", "upload", ec_app_name, ".", ".", "--repo-type=space"]
 
     try:
-        console.print(f"🚀 [bold cyan]Running: {' '.join(hf_spaces_deploy_cmd)}[/bold cyan]")
+        console.print(f"🚀 [bold cyan]Running: {hf_spaces_deploy_cmd}[/bold cyan]")
         subprocess.run(hf_spaces_deploy_cmd, check=True)
         console.print("✅ [bold green]'huggingface-cli upload' executed successfully.[/bold green]")
     except subprocess.CalledProcessError as e:
-        console.print(f"❌ [bold red]An error occurred: {e}[/bold red]")
+        console.print(f"❌ [bold red]An error occurred: {str(e)}[/bold red]")
