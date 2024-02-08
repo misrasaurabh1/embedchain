@@ -5,9 +5,7 @@ from typing import Any, Optional
 from langchain.schema import BaseMessage as LCBaseMessage
 
 from embedchain.config import BaseLlmConfig
-from embedchain.config.llm.base import (DEFAULT_PROMPT,
-                                        DEFAULT_PROMPT_WITH_HISTORY_TEMPLATE,
-                                        DOCS_SITE_PROMPT_TEMPLATE)
+from embedchain.config.llm.base import DEFAULT_PROMPT, DEFAULT_PROMPT_WITH_HISTORY_TEMPLATE, DOCS_SITE_PROMPT_TEMPLATE
 from embedchain.helpers.json_serializable import JSONSerializable
 from embedchain.memory.base import ChatHistory
 from embedchain.memory.message import ChatMessage
@@ -113,15 +111,6 @@ class BaseLlm(JSONSerializable):
 
     @staticmethod
     def _append_search_and_context(context: str, web_search_result: str) -> str:
-        """Append web search context to existing context
-
-        :param context: Existing context
-        :type context: str
-        :param web_search_result: Web search result
-        :type web_search_result: str
-        :return: Concatenated web search result
-        :rtype: str
-        """
         return f"{context}\nWeb Search Result: {web_search_result}"
 
     def get_answer_from_llm(self, prompt: str):
