@@ -2,6 +2,11 @@ import copy
 import os
 from typing import Optional, Union
 
+import weaviate
+
+from embedchain.config.vectordb.weaviate import WeaviateDBConfig
+from embedchain.vectordb.base import BaseVectorDB
+
 try:
     import weaviate
 except ImportError:
@@ -307,7 +312,7 @@ class WeaviateDB(BaseVectorDB):
         :rtype: int
         """
         data = self.client.query.aggregate(self.index_name).with_meta_count().do()
-        return data["data"]["Aggregate"].get(self.index_name)[0]["meta"]["count"]
+        return data["data"]["Aggregate"][self.index_name][0]["meta"]["count"]
 
     def _get_or_create_db(self):
         """Called during initialization"""
