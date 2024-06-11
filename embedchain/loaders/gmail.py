@@ -60,10 +60,13 @@ class GmailReader:
         return creds
 
     def load_emails(self) -> list[dict]:
-        response = self.service.users().messages().list(userId="me", q=self.query).execute()
+        response = (
+            self.service.users().messages().list(userId="me", q=self.query, maxResults=self.results_per_page).execute()
+        )
         messages = response.get("messages", [])
 
-        return [self._parse_email(self._get_email(message["id"])) for message in messages]
+        message_ids = [message["id"] for message in messages]
+        return [self._parse_email(self._get_email(msg_id)) for msg_id in message_ids]
 
     def _get_email(self, message_id: str):
         raw_message = self.service.users().messages().get(userId="me", id=message_id, format="raw").execute()
