@@ -3,6 +3,9 @@ import logging
 from urllib.parse import urljoin, urlparse
 
 import requests
+from bs4 import BeautifulSoup
+
+from embedchain.loaders.base_loader import BaseLoader
 
 try:
     from bs4 import BeautifulSoup
@@ -61,49 +64,39 @@ class DocsSiteLoader(BaseLoader):
             return []
 
         soup = BeautifulSoup(response.content, "html.parser")
-        selectors = [
-            "article.bd-article",
-            'article[role="main"]',
-            "div.md-content",
-            'div[role="main"]',
-            "div.container",
-            "div.section",
-            "article",
-            "main",
-        ]
 
-        output = []
-        for selector in selectors:
-            element = soup.select_one(selector)
-            if element:
-                content = element.prettify()
-                break
+        # Combined selector to find relevant content directly
+        selector = ",".join(
+            [
+                "article.bd-article",
+                'article[role="main"]',
+                "div.md-content",
+                'div[role="main"]',
+                "div.container",
+                "div.section",
+                "article",
+                "main",
+            ]
+        )
+        element = soup.select_one(selector)
+
+        if element:
+            soup = BeautifulSoup(element.prettify(), "html.parser")
         else:
-            content = soup.get_text()
+            soup = BeautifulSoup(soup.get_text(), "html.parser")
 
-        soup = BeautifulSoup(content, "html.parser")
-        ignored_tags = [
-            "nav",
-            "aside",
-            "form",
-            "header",
-            "noscript",
-            "svg",
-            "canvas",
-            "footer",
-            "script",
-            "style",
-        ]
-        for tag in soup(ignored_tags):
+        ignored_tags = {"nav", "aside", "form", "header", "noscript", "svg", "canvas", "footer", "script", "style"}
+
+        for tag in soup.find_all(ignored_tags):
             tag.decompose()
 
         content = " ".join(soup.stripped_strings)
-        output.append(
+        output = [
             {
                 "content": content,
                 "meta_data": {"url": url},
             }
-        )
+        ]
 
         return output
 
