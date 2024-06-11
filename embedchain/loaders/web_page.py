@@ -3,6 +3,7 @@ import logging
 
 import requests
 
+
 try:
     from bs4 import BeautifulSoup
 except ImportError:
@@ -48,9 +49,10 @@ class WebPageLoader(BaseLoader):
     @staticmethod
     def _get_clean_content(html, url) -> str:
         soup = BeautifulSoup(html, "html.parser")
-        original_size = len(str(soup.get_text()))
+        original_size = len(soup.get_text())
 
-        tags_to_exclude = [
+        # Merge exclusion criteria into single pass
+        tags_to_exclude = {
             "nav",
             "aside",
             "form",
@@ -61,27 +63,28 @@ class WebPageLoader(BaseLoader):
             "footer",
             "script",
             "style",
-        ]
-        for tag in soup(tags_to_exclude):
-            tag.decompose()
-
-        ids_to_exclude = ["sidebar", "main-navigation", "menu-main-menu"]
-        for id_ in ids_to_exclude:
-            tags = soup.find_all(id=id_)
-            for tag in tags:
-                tag.decompose()
-
-        classes_to_exclude = [
+        }
+        ids_to_exclude = {
+            "sidebar",
+            "main-navigation",
+            "menu-main-menu",
+        }
+        classes_to_exclude = {
             "elementor-location-header",
             "navbar-header",
             "nav",
             "header-sidebar-wrapper",
             "blog-sidebar-wrapper",
             "related-posts",
-        ]
-        for class_name in classes_to_exclude:
-            tags = soup.find_all(class_=class_name)
-            for tag in tags:
+        }
+
+        # Single pass to decompose unwanted tags, ids, and classes
+        for tag in soup.find_all(True):
+            if (
+                tag.name in tags_to_exclude
+                or tag.get("id") in ids_to_exclude
+                or any(cls in classes_to_exclude for cls in tag.get("class", []))
+            ):
                 tag.decompose()
 
         content = soup.get_text()
