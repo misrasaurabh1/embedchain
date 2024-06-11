@@ -3,6 +3,8 @@ import logging
 import uuid
 from typing import Any, Optional
 
+import orjson  # Use orjson for faster JSON deserialization
+
 from embedchain.core.db.database import get_session
 from embedchain.core.db.models import ChatHistory as ChatHistoryModel
 from embedchain.memory.message import ChatMessage
@@ -121,7 +123,8 @@ class ChatHistory:
 
     @staticmethod
     def _deserialize_json(metadata: str):
-        return json.loads(metadata)
+        # Use orjson.loads which is faster than json.loads
+        return orjson.loads(metadata)
 
     def close_connection(self):
         self.connection.close()
