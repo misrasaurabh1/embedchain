@@ -86,7 +86,7 @@ class JSONSerializable:
             return cls()
 
     @staticmethod
-    def _auto_encoder(obj: Any) -> Union[dict[str, Any], None]:
+    def _auto_encoder(obj: Any) -> Union[dict, None]:
         """
         Automatically encode an object for JSON serialization.
 
@@ -99,28 +99,20 @@ class JSONSerializable:
         if hasattr(obj, "__dict__"):
             dct = {}
             for key, value in obj.__dict__.items():
-                try:
+                if isinstance(value, JSONSerializable):
                     # Recursive: If the value is an instance of a subclass of JSONSerializable,
                     # serialize it using the JSONSerializable serialize method.
-                    if isinstance(value, JSONSerializable):
-                        serialized_value = value.serialize()
-                        # The value is stored as a serialized string.
-                        dct[key] = json.loads(serialized_value)
-                    # Custom rules (subclass is not json serializable by default)
-                    elif isinstance(value, Template):
-                        dct[key] = {"__type__": "Template", "data": value.template}
-                    # Future custom types we can follow a similar pattern
-                    # elif isinstance(value, SomeOtherType):
-                    #     dct[key] = {
-                    #         "__type__": "SomeOtherType",
-                    #         "data": value.some_method()
-                    #     }
-                    # NOTE: Keep in mind that this logic needs to be applied to the decoder too.
-                    else:
-                        json.dumps(value)  # Try to serialize the value.
+                    serialized_value = value.serialize()
+                    # The value is stored as a serialized string.
+                    dct[key] = json.loads(serialized_value)
+                elif isinstance(value, Template):
+                    dct[key] = {"__type__": "Template", "data": value.template}
+                else:
+                    try:
+                        json.dumps(value)  # Verify if value is serializable.
                         dct[key] = value
-                except TypeError:
-                    pass  # If it fails, simply pass to skip this key-value pair of the dictionary.
+                    except TypeError:
+                        pass  # If it fails, simply pass to skip this key-value pair of the dictionary.
 
             dct["__class__"] = obj.__class__.__name__
             return dct
@@ -196,3 +188,49 @@ class JSONSerializable:
             target_class (Type): The class to be registered.
         """
         cls._deserializable_classes.add(target_class)
+
+    @staticmethod
+    def _auto_encoder(obj: Any) -> Union[dict, None]:
+        """
+        Automatically encode an object for JSON serialization.
+
+        Args:
+            obj (Object): The object to be encoded.
+
+        Returns:
+            dict: A dictionary representation of the object.
+        """
+        if hasattr(obj, "__dict__"):
+            dct = {}
+            for key, value in obj.__dict__.items():
+                if isinstance(value, JSONSerializable):
+                    # Recursive: If the value is an instance of a subclass of JSONSerializable,
+                    # serialize it using the JSONSerializable serialize method.
+                    serialized_value = value.serialize()
+                    # The value is stored as a serialized string.
+                    dct[key] = json.loads(serialized_value)
+                elif isinstance(value, Template):
+                    dct[key] = {"__type__": "Template", "data": value.template}
+                else:
+                    try:
+                        json.dumps(value)  # Verify if value is serializable.
+                        dct[key] = value
+                    except TypeError:
+                        pass  # If it fails, simply pass to skip this key-value pair of the dictionary.
+
+            dct["__class__"] = obj.__class__.__name__
+            return dct
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+    def serialize(self) -> str:
+        """
+        Serialize the object to a JSON-formatted string.
+
+        Returns:
+            str: A JSON string representation of the object.
+        """
+        try:
+            return json.dumps(self, default=self._auto_encoder, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Serialization error: {e}")
+            return "{}"
