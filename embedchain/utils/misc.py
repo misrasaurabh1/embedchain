@@ -6,6 +6,7 @@ import re
 import string
 from typing import Any
 
+from bs4 import BeautifulSoup
 from schema import Optional, Or, Schema
 from tqdm import tqdm
 
@@ -15,56 +16,40 @@ logger = logging.getLogger(__name__)
 
 
 def parse_content(content, type):
-    implemented = ["html.parser", "lxml", "lxml-xml", "xml", "html5lib"]
+    implemented = {"html.parser", "lxml", "lxml-xml", "xml", "html5lib"}
     if type not in implemented:
-        raise ValueError(f"Parser type {type} not implemented. Please choose one of {implemented}")
-
-    from bs4 import BeautifulSoup
+        raise ValueError(f"Parser type {type} not implemented. Please choose one of {list(implemented)}")
 
     soup = BeautifulSoup(content, type)
-    original_size = len(str(soup.get_text()))
+    original_size = len(soup.get_text())
 
-    tags_to_exclude = [
-        "nav",
-        "aside",
-        "form",
-        "header",
-        "noscript",
-        "svg",
-        "canvas",
-        "footer",
-        "script",
-        "style",
-    ]
-    for tag in soup(tags_to_exclude):
-        tag.decompose()
-
-    ids_to_exclude = ["sidebar", "main-navigation", "menu-main-menu"]
-    for id in ids_to_exclude:
-        tags = soup.find_all(id=id)
-        for tag in tags:
-            tag.decompose()
-
-    classes_to_exclude = [
+    # Use a single traversal to remove unwanted tags, ids, and classes
+    tags_to_exclude = {"nav", "aside", "form", "header", "noscript", "svg", "canvas", "footer", "script", "style"}
+    ids_to_exclude = {"sidebar", "main-navigation", "menu-main-menu"}
+    classes_to_exclude = {
         "elementor-location-header",
         "navbar-header",
         "nav",
         "header-sidebar-wrapper",
         "blog-sidebar-wrapper",
         "related-posts",
-    ]
-    for class_name in classes_to_exclude:
-        tags = soup.find_all(class_=class_name)
-        for tag in tags:
-            tag.decompose()
+    }
 
-    content = soup.get_text()
-    content = clean_string(content)
+    for tag in (
+        soup.find_all(tags_to_exclude) + soup.find_all(id=ids_to_exclude) + soup.find_all(class_=classes_to_exclude)
+    ):
+        tag.decompose()
 
+    content = clean_string(soup.get_text())
     cleaned_size = len(content)
-    if original_size != 0:
+
+    if original_size:
         logger.info(
-            f"Cleaned page size: {cleaned_size} characters, down from {original_size} (shrunk: {original_size-cleaned_size} chars, {round((1-(cleaned_size/original_size)) * 100, 2)}%)"  # noqa:E501
+            "Cleaned page size: %d characters, down from %d (shrunk: %d chars, %.2f%%)",
+            cleaned_size,
+            original_size,
+            original_size - cleaned_size,
+            (1 - cleaned_size / original_size) * 100,
         )
 
     return content
@@ -81,21 +66,11 @@ def clean_string(text):
         cleaned_text (str): The cleaned text after all the cleaning operations
         have been performed.
     """
-    # Stripping and reducing multiple spaces to single:
-    cleaned_text = re.sub(r"\s+", " ", text.strip())
+    # Perform all replace operations in one go to avoid multiple traversals of the string
+    # Stripping and reducing multiple spaces to single and removing backslashes:
+    cleaned_text = re.sub(r"\s+", " ", text.strip()).replace("\\", "").replace("#", " ")
 
-    # Removing backslashes:
-    cleaned_text = cleaned_text.replace("\\", "")
-
-    # Replacing hash characters:
-    cleaned_text = cleaned_text.replace("#", " ")
-
-    # Eliminating consecutive non-alphanumeric characters:
-    # This regex identifies consecutive non-alphanumeric characters (i.e., not
-    # a word character [a-zA-Z0-9_] and not a whitespace) in the string
-    # and replaces each group of such characters with a single occurrence of
-    # that character.
-    # For example, "!!! hello !!!" would become "! hello !".
+    # Eliminating consecutive non-alphanumeric characters
     cleaned_text = re.sub(r"([^\w\s])\1*", r"\1", cleaned_text)
 
     return cleaned_text
