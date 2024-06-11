@@ -9,6 +9,8 @@ from typing import Optional
 
 from bs4 import BeautifulSoup
 
+from embedchain.loaders.base_loader import BaseLoader
+
 try:
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
@@ -140,5 +142,5 @@ class GmailLoader(BaseLoader):
 
     @staticmethod
     def _generate_doc_id(query: str, data: list[dict]) -> str:
-        content_strings = [email["content"] for email in data]
+        content_strings = (email["content"] for email in data)
         return hashlib.sha256((query + ", ".join(content_strings)).encode()).hexdigest()
