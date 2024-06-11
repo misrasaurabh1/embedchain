@@ -139,23 +139,24 @@ class JSONSerializable:
         """
         class_name = dct.pop("__class__", None)
         if class_name:
-            if not hasattr(cls, "_deserializable_classes"):  # Additional safety check
+            try:
+                deserializable_classes = cls._deserializable_classes
+            except AttributeError:
                 raise AttributeError(f"`{class_name}` has no registry of allowed deserializations.")
-            if class_name not in {cl.__name__ for cl in cls._deserializable_classes}:
+
+            class_names = {cl.__name__: cl for cl in deserializable_classes}
+            if class_name not in class_names:
                 raise KeyError(f"Deserialization of class `{class_name}` is not allowed.")
-            target_class = next((cl for cl in cls._deserializable_classes if cl.__name__ == class_name), None)
-            if target_class:
-                obj = target_class.__new__(target_class)
-                for key, value in dct.items():
-                    if isinstance(value, dict) and "__type__" in value:
-                        if value["__type__"] == "Template":
-                            value = Template(value["data"])
-                        # For future custom types we can follow a similar pattern
-                        # elif value["__type__"] == "SomeOtherType":
-                        #     value = SomeOtherType.some_constructor(value["data"])
-                    default_value = getattr(target_class, key, None)
-                    setattr(obj, key, value or default_value)
-                return obj
+
+            target_class = class_names[class_name]
+            obj = target_class.__new__(target_class)
+
+            for key, value in dct.items():
+                if isinstance(value, dict) and value.get("__type__") == "Template":
+                    value = Template(value["data"])
+                setattr(obj, key, value or getattr(target_class, key, None))
+
+            return obj
         return dct
 
     def save_to_file(self, filename: str) -> None:
