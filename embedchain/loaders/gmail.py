@@ -8,9 +8,11 @@ from textwrap import dedent
 from typing import Optional
 
 from bs4 import BeautifulSoup
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
 
 try:
-    from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
@@ -43,20 +45,15 @@ class GmailReader:
         if not os.path.exists("credentials.json"):
             raise FileNotFoundError("Missing 'credentials.json'. Download it from your Google Developer account.")
 
-        creds = (
-            Credentials.from_authorized_user_file("token.json", GmailReader.SCOPES)
-            if os.path.exists("token.json")
-            else None
-        )
+        if os.path.exists("token.json"):
+            creds = Credentials.from_authorized_user_file("token.json", GmailReader.SCOPES)
+            if creds and creds.valid:
+                return creds
 
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file("credentials.json", GmailReader.SCOPES)
-                creds = flow.run_local_server(port=8080)
-            with open("token.json", "w") as token:
-                token.write(creds.to_json())
+        flow = InstalledAppFlow.from_client_secrets_file("credentials.json", GmailReader.SCOPES)
+        creds = flow.run_local_server(port=8080)
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
         return creds
 
     def load_emails(self) -> list[dict]:
@@ -68,6 +65,79 @@ class GmailReader:
     def _get_email(self, message_id: str):
         raw_message = self.service.users().messages().get(userId="me", id=message_id, format="raw").execute()
         return base64.urlsafe_b64decode(raw_message["raw"])
+
+    def _parse_email(self, raw_email) -> dict:
+        mime_msg = message_from_bytes(raw_email)
+        return {
+            "subject": self._get_header(mime_msg, "Subject"),
+            "from": self._get_header(mime_msg, "From"),
+            "to": self._get_header(mime_msg, "To"),
+            "date": self._format_date(mime_msg),
+            "body": self._get_body(mime_msg),
+        }
+
+    @staticmethod
+    def _get_header(mime_msg, header_name: str) -> str:
+        return mime_msg.get(header_name, "")
+
+    @staticmethod
+    def _format_date(mime_msg) -> Optional[str]:
+        date_header = GmailReader._get_header(mime_msg, "Date")
+        return parsedate_to_datetime(date_header).isoformat() if date_header else None
+
+    @staticmethod
+    def _get_body(mime_msg) -> str:
+        def decode_payload(part):
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                return part.get_payload(decode=True).decode(charset)
+            except UnicodeDecodeError:
+                return part.get_payload(decode=True).decode(charset, errors="replace")
+
+        if mime_msg.is_multipart():
+            for part in mime_msg.walk():
+                ctype = part.get_content_type()
+                cdispo = str(part.get("Content-Disposition"))
+
+                if ctype == "text/plain" and "attachment" not in cdispo:
+                    return decode_payload(part)
+                elif ctype == "text/html":
+                    return decode_payload(part)
+        else:
+            return decode_payload(mime_msg)
+
+        return ""
+
+    @staticmethod
+    def _initialize_service():
+        credentials = GmailReader._get_credentials()
+        return build("gmail", "v1", credentials=credentials)
+
+    def load_emails(self) -> list[dict]:
+        response = (
+            self.service.users().messages().list(userId="me", q=self.query, maxResults=self.results_per_page).execute()
+        )
+        messages = response.get("messages", [])
+        if not messages:
+            return []
+
+        message_ids = [msg["id"] for msg in messages]
+        return [self._parse_email(raw_email) for raw_email in self._get_emails(message_ids)]
+
+    def _get_emails(self, message_ids: list[str]):
+        batch = self.service.new_batch_http_request()
+        emails = []
+
+        def callback(request_id, response, exception):
+            if exception is None:
+                emails.append(base64.urlsafe_b64decode(response["raw"]))
+
+        for msg_id in message_ids:
+            request = self.service.users().messages().get(userId="me", id=msg_id, format="raw")
+            batch.add(request, callback=callback)
+
+        batch.execute()
+        return emails
 
     def _parse_email(self, raw_email) -> dict:
         mime_msg = message_from_bytes(raw_email)
