@@ -81,7 +81,7 @@ class GmailReader:
 
     @staticmethod
     def _get_header(mime_msg, header_name: str) -> str:
-        return mime_msg.get(header_name, "")
+        return mime_msg[header_name] if header_name in mime_msg else ""
 
     @staticmethod
     def _format_date(mime_msg) -> Optional[str]:
