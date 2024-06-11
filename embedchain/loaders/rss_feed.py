@@ -19,10 +19,10 @@ class RSSFeedLoader(BaseLoader):
 
     @staticmethod
     def serialize_metadata(metadata):
+        allowed_types = {str, int, float, bool}
         for key, value in metadata.items():
-            if not isinstance(value, (str, int, float, bool)):
+            if type(value) not in allowed_types:
                 metadata[key] = str(value)
-
         return metadata
 
     @staticmethod
