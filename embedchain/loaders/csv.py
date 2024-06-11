@@ -12,8 +12,14 @@ class CsvLoader(BaseLoader):
     @staticmethod
     def _detect_delimiter(first_line):
         delimiters = [",", "\t", ";", "|"]
-        counts = {delimiter: first_line.count(delimiter) for delimiter in delimiters}
-        return max(counts, key=counts.get)
+        max_count = -1
+        best_delimiter = ""
+        for delimiter in delimiters:
+            count = first_line.count(delimiter)
+            if count > max_count:
+                max_count = count
+                best_delimiter = delimiter
+        return best_delimiter
 
     @staticmethod
     def _get_file_content(content):
