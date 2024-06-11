@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from embedchain.core.db.database import get_session
 from embedchain.core.db.models import ChatHistory as ChatHistoryModel
@@ -116,7 +116,7 @@ class ChatHistory:
         return self.db_session.query(ChatHistoryModel).filter_by(**params).count()
 
     @staticmethod
-    def _serialize_json(metadata: dict[str, Any]):
+    def _serialize_json(metadata: Dict[str, Any]):
         return json.dumps(metadata)
 
     @staticmethod
