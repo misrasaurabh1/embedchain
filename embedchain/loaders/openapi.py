@@ -12,18 +12,19 @@ class OpenAPILoader(BaseLoader):
     @staticmethod
     def _get_file_content(content):
         url = urlparse(content)
-        if all([url.scheme, url.netloc]) and url.scheme not in ["file", "http", "https"]:
+        if all([url.scheme, url.netloc]) and url.scheme not in {"file", "http", "https"}:
             raise ValueError("Not a valid URL.")
 
-        if url.scheme in ["http", "https"]:
+        if url.scheme in {"http", "https"}:
             response = requests.get(content)
             response.raise_for_status()
             return StringIO(response.text)
         elif url.scheme == "file":
             path = url.path
-            return open(path)
         else:
-            return open(content)
+            path = content
+
+        return open(path)
 
     @staticmethod
     def load_data(content):
