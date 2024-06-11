@@ -1,3 +1,10 @@
+from typing import Any, Optional
+
+from embedchain.config import BaseLlmConfig
+from embedchain.helpers.json_serializable import JSONSerializable
+from embedchain.memory.base import ChatHistory
+from langchain.schema import BaseMessage as LCBaseMessage
+from langchain.schema import HumanMessage, SystemMessage
 import logging
 from collections.abc import Generator
 from typing import Any, Optional
@@ -298,8 +305,6 @@ class BaseLlm(JSONSerializable):
         :return: List of messages
         :rtype: list[BaseMessage]
         """
-        from langchain.schema import HumanMessage, SystemMessage
-
         messages = []
         if system_prompt:
             messages.append(SystemMessage(content=system_prompt))
