@@ -2,22 +2,22 @@ import os
 import re
 import shutil
 import subprocess
+from importlib.util import find_spec
 
-import pkg_resources
 from rich.console import Console
 
 console = Console()
 
 
 def get_pkg_path_from_name(template: str):
-    try:
-        # Determine the installation location of the embedchain package
-        package_path = pkg_resources.resource_filename("embedchain", "")
-    except ImportError:
+    # Check if the package 'embedchain' can be located
+    embedchain_spec = find_spec("embedchain")
+    if embedchain_spec is None:
         console.print("❌ [bold red]Failed to locate the 'embedchain' package. Is it installed?[/bold red]")
         return
 
     # Construct the source path from the embedchain package
+    package_path = embedchain_spec.submodule_search_locations[0]
     src_path = os.path.join(package_path, "deployment", template)
 
     if not os.path.exists(src_path):
