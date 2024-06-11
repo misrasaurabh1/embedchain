@@ -254,37 +254,34 @@ class GithubLoader(BaseLoader):
     def _get_valid_github_query(query: str):
         """Check if query is valid and return search types and valid GitHub query."""
         query_terms = shlex.split(query)
-        # query must provide repo to load data from
-        if len(query_terms) < 1 or "repo:" not in query:
+
+        if len(query_terms) < 1 or not any(term.startswith("repo:") for term in query_terms):
             raise ValueError(
-                "GithubLoader requires a search query with `repo:` term. Refer docs - `https://docs.embedchain.ai/data-sources/github`"  # noqa: E501
+                "GithubLoader requires a search query with `repo:` term. Refer docs - `https://docs.embedchain.ai/data-sources/github`"
             )
 
         github_query = []
         types = set()
-        type_pattern = r"type:([a-zA-Z,]+)"
+
         for term in query_terms:
-            term_match = re.search(type_pattern, term)
-            if term_match:
-                search_types = term_match.group(1).split(",")
+            if term.startswith("type:"):
+                search_types = term[5:].split(",")
                 types.update(search_types)
             else:
                 github_query.append(term)
 
-        # query must provide search type
-        if len(types) == 0:
+        if not types:
             raise ValueError(
-                "GithubLoader requires a search query with `type:` term. Refer docs - `https://docs.embedchain.ai/data-sources/github`"  # noqa: E501
+                "GithubLoader requires a search query with `type:` term. Refer docs - `https://docs.embedchain.ai/data-sources/github`"
             )
 
-        for search_type in search_types:
-            if search_type not in VALID_SEARCH_TYPES:
-                raise ValueError(
-                    f"Invalid search type: {search_type}. Valid types are: {', '.join(VALID_SEARCH_TYPES)}"
-                )
+        invalid_types = [t for t in types if t not in VALID_SEARCH_TYPES]
+        if invalid_types:
+            raise ValueError(
+                f"Invalid search type(s): {', '.join(invalid_types)}. Valid types are: {', '.join(VALID_SEARCH_TYPES)}"
+            )
 
         query = " ".join(github_query)
-
         return types, query
 
     def load_data(self, search_query: str, max_results: int = 1000):
