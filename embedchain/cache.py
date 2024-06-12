@@ -36,7 +36,7 @@ def gptcache_update_cache_callback(llm_data, update_cache_func, *args, **kwargs)
     return llm_data
 
 
-def _gptcache_session_hit_func(cur_session_id: str, cache_session_ids: list, cache_questions: list, cache_answer: str):
+def _gptcache_session_hit_func(cur_session_id: str, cache_session_ids: set, cache_questions: list, cache_answer: str):
     return cur_session_id in cache_session_ids
 
 
