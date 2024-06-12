@@ -2,6 +2,12 @@ import copy
 import os
 from typing import Any, Optional, Union
 
+from qdrant_client import QdrantClient
+from qdrant_client.http import models
+
+from embedchain.config.vectordb.qdrant import QdrantDBConfig
+from embedchain.vectordb.base import BaseVectorDB
+
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.http import models
@@ -237,16 +243,13 @@ class QdrantDB(BaseVectorDB):
 
     @staticmethod
     def _generate_query(where: dict):
-        must_fields = []
-        for key, value in where.items():
-            must_fields.append(
-                models.FieldCondition(
-                    key=f"metadata.{key}",
-                    match=models.MatchValue(
-                        value=value,
-                    ),
-                )
+        must_fields = [
+            models.FieldCondition(
+                key=f"metadata.{key}",
+                match=models.MatchValue(value=value),
             )
+            for key, value in where.items()
+        ]
         return models.Filter(must=must_fields)
 
     def delete(self, where: dict):
