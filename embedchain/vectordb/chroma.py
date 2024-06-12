@@ -1,7 +1,9 @@
 import logging
 from typing import Any, Optional, Union
 
+import chromadb
 from chromadb import Collection, QueryResult
+from chromadb.config import Settings
 from langchain.docstore.document import Document
 from tqdm import tqdm
 
@@ -80,16 +82,16 @@ class ChromaDB(BaseVectorDB):
 
     @staticmethod
     def _generate_where_clause(where: dict[str, any]) -> dict[str, any]:
-        # If only one filter is supplied, return it as is
-        # (no need to wrap in $and based on chroma docs)
+        # Return empty dict if 'where' is None
         if where is None:
             return {}
-        if len(where.keys()) <= 1:
+
+        # If only one filter is supplied, return it as is
+        # (no need to wrap in $and based on chroma docs)
+        if len(where) <= 1:
             return where
-        where_filters = []
-        for k, v in where.items():
-            if isinstance(v, str):
-                where_filters.append({k: v})
+
+        where_filters = [{k: v} for k, v in where.items() if isinstance(v, str)]
         return {"$and": where_filters}
 
     def _get_or_create_collection(self, name: str) -> Collection:
