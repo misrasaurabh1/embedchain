@@ -1,7 +1,9 @@
 import logging
 from typing import Any, Optional, Union
 
+import chromadb
 from chromadb import Collection, QueryResult
+from chromadb.config import Settings
 from langchain.docstore.document import Document
 from tqdm import tqdm
 
@@ -172,13 +174,10 @@ class ChromaDB(BaseVectorDB):
         :return: Formatted results
         :rtype: list[tuple[Document, float]]
         """
+        documents, metadatas, distances = results["documents"][0], results["metadatas"][0], results["distances"][0]
         return [
-            (Document(page_content=result[0], metadata=result[1] or {}), result[2])
-            for result in zip(
-                results["documents"][0],
-                results["metadatas"][0],
-                results["distances"][0],
-            )
+            (Document(page_content=doc, metadata=meta or {}), dist)
+            for doc, meta, dist in zip(documents, metadatas, distances)
         ]
 
     def query(
