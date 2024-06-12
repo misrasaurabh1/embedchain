@@ -2,6 +2,12 @@ import copy
 import os
 from typing import Any, Optional, Union
 
+from qdrant_client import QdrantClient
+from qdrant_client.http import models
+
+from embedchain.config.vectordb.qdrant import QdrantDBConfig
+from embedchain.vectordb.base import BaseVectorDB
+
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.http import models
@@ -163,57 +169,42 @@ class QdrantDB(BaseVectorDB):
         self,
         input_query: str,
         n_results: int,
-        where: dict[str, any],
+        where: Optional[dict[str, Any]] = None,
         citations: bool = False,
         **kwargs: Optional[dict[str, Any]],
     ) -> Union[list[tuple[str, dict]], list[str]]:
         """
-        query contents from vector database based on vector similarity
-        :param input_query: query string
-        :type input_query: str
-        :param n_results: no of similar documents to fetch from database
-        :type n_results: int
-        :param where: Optional. to filter data
-        :type where: dict[str, any]
-        :param citations: we use citations boolean param to return context along with the answer.
-        :type citations: bool, default is False.
+        Query contents from the vector database based on vector similarity.
+        :param input_query: Query string.
+        :param n_results: Number of similar documents to fetch from the database.
+        :param where: Optional. To filter data.
+        :param citations: Boolean param to return context along with the answer.
         :return: The content of the document that matched your query,
-        along with url of the source and doc_id (if citations flag is true)
-        :rtype: list[str], if citations=False, otherwise list[tuple[str, str, str]]
+                 along with URL of the source and doc_id (if citations flag is true).
         """
         query_vector = self.embedder.embedding_fn([input_query])[0]
-        keys = set(where.keys() if where is not None else set())
 
-        qdrant_must_filters = []
-        if len(keys) > 0:
-            for key in keys:
-                qdrant_must_filters.append(
-                    models.FieldCondition(
-                        key="metadata.{}".format(key),
-                        match=models.MatchValue(
-                            value=where.get(key),
-                        ),
-                    )
-                )
+        qdrant_must_filters = [
+            models.FieldCondition(
+                key=f"metadata.{key}",
+                match=models.MatchValue(value=value),
+            )
+            for key, value in (where or {}).items()
+        ]
 
         results = self.client.search(
             collection_name=self.collection_name,
-            query_filter=models.Filter(must=qdrant_must_filters),
+            query_filter=models.Filter(must=qdrant_must_filters) if qdrant_must_filters else None,
             query_vector=query_vector,
             limit=n_results,
             **kwargs,
         )
 
-        contexts = []
-        for result in results:
-            context = result.payload["text"]
-            if citations:
-                metadata = result.payload["metadata"]
-                metadata["score"] = result.score
-                contexts.append(tuple((context, metadata)))
-            else:
-                contexts.append(context)
-        return contexts
+        if citations:
+            return [
+                (result.payload["text"], {**result.payload["metadata"], "score": result.score}) for result in results
+            ]
+        return [result.payload["text"] for result in results]
 
     def count(self) -> int:
         response = self.client.get_collection(collection_name=self.collection_name)
