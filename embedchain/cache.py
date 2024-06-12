@@ -26,7 +26,6 @@ def gptcache_data_manager(vector_dimension):
 
 
 def gptcache_data_convert(cache_data):
-    logger.info("[Cache] Cache hit, returning cache data...")
     return cache_data
 
 
