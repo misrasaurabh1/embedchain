@@ -1,7 +1,9 @@
 import logging
 from typing import Any, Optional, Union
 
+import chromadb
 from chromadb import Collection, QueryResult
+from chromadb.config import Settings
 from langchain.docstore.document import Document
 from tqdm import tqdm
 
@@ -102,13 +104,9 @@ class ChromaDB(BaseVectorDB):
         :return: Created collection
         :rtype: Collection
         """
-        if not hasattr(self, "embedder") or not self.embedder:
+        if not getattr(self, "embedder", None):
             raise ValueError("Cannot create a Chroma database collection without an embedder.")
-        self.collection = self.client.get_or_create_collection(
-            name=name,
-            embedding_function=self.embedder.embedding_fn,
-        )
-        return self.collection
+        return self.client.get_or_create_collection(name=name, embedding_function=self.embedder.embedding_fn)
 
     def get(self, ids: Optional[list[str]] = None, where: Optional[dict[str, any]] = None, limit: Optional[int] = None):
         """
