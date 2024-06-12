@@ -1,7 +1,10 @@
 import logging
-from typing import Any, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+import chromadb
 from chromadb import Collection, QueryResult
+from chromadb.config import Settings
+from chromadb.errors import InvalidDimensionException
 from langchain.docstore.document import Document
 from tqdm import tqdm
 
@@ -79,18 +82,12 @@ class ChromaDB(BaseVectorDB):
         return self.client
 
     @staticmethod
-    def _generate_where_clause(where: dict[str, any]) -> dict[str, any]:
-        # If only one filter is supplied, return it as is
-        # (no need to wrap in $and based on chroma docs)
-        if where is None:
+    def _generate_where_clause(where: Dict[str, Any]) -> Dict[str, Any]:
+        if not where:
             return {}
-        if len(where.keys()) <= 1:
+        if len(where) <= 1:
             return where
-        where_filters = []
-        for k, v in where.items():
-            if isinstance(v, str):
-                where_filters.append({k: v})
-        return {"$and": where_filters}
+        return {"$and": [{k: v} for k, v in where.items() if isinstance(v, str)]}
 
     def _get_or_create_collection(self, name: str) -> Collection:
         """
@@ -163,7 +160,7 @@ class ChromaDB(BaseVectorDB):
             )
 
     @staticmethod
-    def _format_result(results: QueryResult) -> list[tuple[Document, float]]:
+    def _format_result(results: QueryResult) -> List[Tuple[Document, float]]:
         """
         Format Chroma results
 
@@ -173,8 +170,8 @@ class ChromaDB(BaseVectorDB):
         :rtype: list[tuple[Document, float]]
         """
         return [
-            (Document(page_content=result[0], metadata=result[1] or {}), result[2])
-            for result in zip(
+            (Document(page_content=doc, metadata=meta or {}), dist)
+            for doc, meta, dist in zip(
                 results["documents"][0],
                 results["metadatas"][0],
                 results["distances"][0],
@@ -185,11 +182,11 @@ class ChromaDB(BaseVectorDB):
         self,
         input_query: str,
         n_results: int,
-        where: Optional[dict[str, any]] = None,
-        raw_filter: Optional[dict[str, any]] = None,
+        where: Optional[Dict[str, Any]] = None,
+        raw_filter: Optional[Dict[str, Any]] = None,
         citations: bool = False,
-        **kwargs: Optional[dict[str, any]],
-    ) -> Union[list[tuple[str, dict]], list[str]]:
+        **kwargs: Optional[Dict[str, Any]],
+    ) -> Union[List[Tuple[str, Dict]], List[str]]:
         """
         Query contents from vector database based on vector similarity
 
@@ -211,16 +208,10 @@ class ChromaDB(BaseVectorDB):
         if where and raw_filter:
             raise ValueError("Both `where` and `raw_filter` cannot be used together.")
 
-        where_clause = {}
-        if raw_filter:
-            where_clause = raw_filter
-        if where:
-            where_clause = self._generate_where_clause(where)
+        where_clause = raw_filter or (self._generate_where_clause(where) if where else {})
         try:
             result = self.collection.query(
-                query_texts=[
-                    input_query,
-                ],
+                query_texts=[input_query],
                 n_results=n_results,
                 where=where_clause,
             )
@@ -230,17 +221,13 @@ class ChromaDB(BaseVectorDB):
                 + ". This is commonly a side-effect when an embedding function, different from the one used to add the"
                 " embeddings, is used to retrieve an embedding from the database."
             ) from None
+
         results_formatted = self._format_result(result)
-        contexts = []
-        for result in results_formatted:
-            context = result[0].page_content
-            if citations:
-                metadata = result[0].metadata
-                metadata["score"] = result[1]
-                contexts.append((context, metadata))
-            else:
-                contexts.append(context)
-        return contexts
+
+        if citations:
+            return [(res[0].page_content, {**res[0].metadata, "score": res[1]}) for res in results_formatted]
+        else:
+            return [res[0].page_content for res in results_formatted]
 
     def set_collection_name(self, name: str):
         """
@@ -287,3 +274,159 @@ class ChromaDB(BaseVectorDB):
         # A better way would be to create the collection if it is called again after being reset.
         # That means, checking if collection exists in the db-consuming methods, and creating it if it doesn't.
         # That's an extra steps for all uses, just to satisfy a niche use case in a niche method. For now, this will do.
+
+    @staticmethod
+    def _generate_where_clause(where: Dict[str, Any]) -> Dict[str, Any]:
+        if not where:
+            return {}
+        if len(where) <= 1:
+            return where
+        return {"$and": [{k: v} for k, v in where.items() if isinstance(v, str)]}
+
+    @staticmethod
+    def _format_result(results: QueryResult) -> List[Tuple[Document, float]]:
+        """
+        Format Chroma results
+
+        :param results: ChromaDB query results to format.
+        :type results: QueryResult
+        :return: Formatted results
+        :rtype: list[tuple[Document, float]]
+        """
+        return [
+            (Document(page_content=doc, metadata=meta or {}), dist)
+            for doc, meta, dist in zip(
+                results["documents"][0],
+                results["metadatas"][0],
+                results["distances"][0],
+            )
+        ]
+
+    def query(
+        self,
+        input_query: str,
+        n_results: int,
+        where: Optional[Dict[str, Any]] = None,
+        raw_filter: Optional[Dict[str, Any]] = None,
+        citations: bool = False,
+        **kwargs: Optional[Dict[str, Any]],
+    ) -> Union[List[Tuple[str, Dict]], List[str]]:
+        """
+        Query contents from vector database based on vector similarity
+
+        :param input_query: query string
+        :type input_query: str
+        :param n_results: no of similar documents to fetch from database
+        :type n_results: int
+        :param where: to filter data
+        :type where: dict[str, Any]
+        :param raw_filter: Raw filter to apply
+        :type raw_filter: dict[str, Any]
+        :param citations: we use citations boolean param to return context along with the answer.
+        :type citations: bool, default is False.
+        :raises InvalidDimensionException: Dimensions do not match.
+        :return: The content of the document that matched your query,
+        along with url of the source and doc_id (if citations flag is true)
+        :rtype: list[str], if citations=False, otherwise list[tuple[str, str, str]]
+        """
+        if where and raw_filter:
+            raise ValueError("Both `where` and `raw_filter` cannot be used together.")
+
+        where_clause = raw_filter or (self._generate_where_clause(where) if where else {})
+        try:
+            result = self.collection.query(
+                query_texts=[input_query],
+                n_results=n_results,
+                where=where_clause,
+            )
+        except InvalidDimensionException as e:
+            raise InvalidDimensionException(
+                e.message()
+                + ". This is commonly a side-effect when an embedding function, different from the one used to add the"
+                " embeddings, is used to retrieve an embedding from the database."
+            ) from None
+
+        results_formatted = self._format_result(result)
+
+        if citations:
+            return [(res[0].page_content, {**res[0].metadata, "score": res[1]}) for res in results_formatted]
+        else:
+            return [res[0].page_content for res in results_formatted]
+
+    @staticmethod
+    def _generate_where_clause(where: Dict[str, Any]) -> Dict[str, Any]:
+        if not where:
+            return {}
+        if len(where) <= 1:
+            return where
+        return {"$and": [{k: v} for k, v in where.items() if isinstance(v, str)]}
+
+    def query(
+        self,
+        input_query: str,
+        n_results: int,
+        where: Optional[Dict[str, Any]] = None,
+        raw_filter: Optional[Dict[str, Any]] = None,
+        citations: bool = False,
+        **kwargs: Optional[Dict[str, Any]],
+    ) -> Union[List[Tuple[str, Dict]], List[str]]:
+        """
+        Query contents from vector database based on vector similarity
+
+        :param input_query: query string
+        :type input_query: str
+        :param n_results: no of similar documents to fetch from database
+        :type n_results: int
+        :param where: to filter data
+        :type where: dict[str, Any]
+        :param raw_filter: Raw filter to apply
+        :type raw_filter: dict[str, Any]
+        :param citations: we use citations boolean param to return context along with the answer.
+        :type citations: bool, default is False.
+        :raises InvalidDimensionException: Dimensions do not match.
+        :return: The content of the document that matched your query,
+        along with url of the source and doc_id (if citations flag is true)
+        :rtype: list[str], if citations=False, otherwise list[tuple[str, str, str]]
+        """
+        if where and raw_filter:
+            raise ValueError("Both `where` and `raw_filter` cannot be used together.")
+
+        where_clause = raw_filter or (self._generate_where_clause(where) if where else {})
+        try:
+            result = self.collection.query(
+                query_texts=[input_query],
+                n_results=n_results,
+                where=where_clause,
+            )
+        except InvalidDimensionException as e:
+            raise InvalidDimensionException(
+                e.message()
+                + ". This is commonly a side-effect when an embedding function, different from the one used to add the"
+                " embeddings, is used to retrieve an embedding from the database."
+            ) from None
+
+        results_formatted = self._format_result(result)
+
+        if citations:
+            return [(res[0].page_content, {**res[0].metadata, "score": res[1]}) for res in results_formatted]
+        else:
+            return [res[0].page_content for res in results_formatted]
+
+    @staticmethod
+    def _format_result(results: QueryResult) -> List[Tuple[Document, float]]:
+        """
+        Format Chroma results
+
+        :param results: ChromaDB query results to format.
+        :type results: QueryResult
+        :return: Formatted results
+        :rtype: list[tuple[Document, float]]
+        """
+        return [
+            (Document(page_content=doc, metadata=meta or {}), dist)
+            for doc, meta, dist in zip(
+                results["documents"][0],
+                results["metadatas"][0],
+                results["distances"][0],
+            )
+        ]
